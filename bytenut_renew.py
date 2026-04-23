@@ -62,10 +62,10 @@ def login_and_renew(sb, account_info):
         sb.open(panel_url)
         sb.sleep(5)
 
-        # 🌟 关键：强制向下深层滚动，触发懒加载组件
+        # 强制向下深层滚动，触发懒加载组件
         print("📜 正在向下滚动页面以触发所有组件加载...")
         sb.execute_script("window.scrollTo(0, document.body.scrollHeight * 0.8);")
-        sb.sleep(4) # 给网络请求一点时间
+        sb.sleep(4)
 
         # 3. 🛡️ 柔性处理 CF 验证码
         cf_iframe_selector = 'iframe[src*="cloudflare"]'
@@ -75,7 +75,6 @@ def login_and_renew(sb, account_info):
         try:
             sb.wait_for_element_present(cf_iframe_selector, timeout=10)
             
-            # 如果没报错，说明找到了！执行破解流程
             cf_element = sb.find_element(cf_iframe_selector)
             sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", cf_element)
             sb.sleep(2)
@@ -101,30 +100,37 @@ def login_and_renew(sb, account_info):
                         break
             
             if cf_passed:
-                print("✅ 人机验证已成功打勾 (Token 获取成功)！")
+                print("✅ 人机验证已成功！")
             else:
-                print("⚠️ 人机验证 Token 获取超时，但将继续尝试点击续期...")
+                print("⚠️ Token 获取超时，将继续尝试点击续期...")
                 
         except Exception:
-            # 🌟 找不到验证码时的备用方案：直接放行！
-            print("⚠️ 未找到可见的 CF 验证码框。可能当前 IP 信誉良好被直接放行，准备直接点击续期...")
+            print("⚠️ 未找到可见的 CF 验证码框。可能被直接放行，准备直接点击续期...")
 
-        # 4. 点击续期
+        # 4. 点击续期 (✨ V9 核心修复区 ✨)
         print("🔍 查找并点击续期按钮...")
-        if sb.is_element_present(extend_button_selector):
+        try:
+            # 等待按钮出现在源码中
+            sb.wait_for_element_present(extend_button_selector, timeout=10)
+            # 获取元素的实体对象
             btn_element = sb.find_element(extend_button_selector)
+            
+            # 将实体对象滚动到中心
             sb.execute_script("arguments[0].scrollIntoView({block: 'center'});", btn_element)
             sb.sleep(2)
             
-            print("🖱️ 发起点击...")
-            sb.js_click(extend_button_selector)
+            print("🖱️ 针对元素实体发起原生 JS 点击...")
+            # 避开选择器解析，直接让浏览器点击这个实体对象
+            sb.execute_script("arguments[0].click();", btn_element)
             sb.sleep(6)
             
-            send_telegram_message(f"✅ 账号 {username} | 操作流程执行完毕！")
+            send_telegram_message(f"✅ 账号 {username} | 续期点击指令执行完毕！")
             sb.save_screenshot(f"success_final_{username}.png")
-        else:
+            
+        except Exception as e:
             send_telegram_message(f"❌ 账号 {username} | 找不到续期按钮。")
             sb.save_screenshot(f"no_btn_{username}.png")
+            print(f"详细错误: {e}")
 
     except Exception as e:
         error_screenshot = f"error_{username}_{int(time.time())}.png"
